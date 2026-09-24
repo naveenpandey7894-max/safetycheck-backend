@@ -1,0 +1,209 @@
+// SafetyCheck — Factory/Facility Safety Inspection & Compliance Platform
+// Prisma schema (Postgres). Run `prisma generate` then `prisma db push`
+// (or `prisma migrate dev`) to create these tables.
+
+generator client {
+  provider             = "prisma-client-py"
+  interface            = "asyncio"
+  recursive_type_depth = 5
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  WORKER      // reports issues, does assigned checklist items
+  SUPERVISOR  // reviews/acknowledges reports, assigns fixes
+  ADMIN       // company-wide dashboard, manages sites/users
+}
+
+enum ReportCategory {
+  SAFETY_HAZARD
+  EQUIPMENT_FAULT
+  QUALITY_DEFECT
+  CLEANLINESS
+  FIRE_SAFETY
+  ELECTRICAL
+  OTHER
+}
+
+enum Severity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum ReportStatus {
+  PENDING_REVIEW   // AI hasn't confirmed yet
+  NOT_AN_ISSUE     // AI or human rejected it
+  OPEN             // confirmed, needs action
+  ACKNOWLEDGED     // supervisor has seen it
+  IN_PROGRESS      // being fixed
+  RESOLVED
+  CLOSED
+}
+
+enum InspectionStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  OVERDUE
+}
+
+model Company {
+  id        Int      @id @default(autoincrement())
+  name      String
+  createdAt DateTime @default(now())
+
+  sites Site[]
+  users User[]
+
+  @@map("companies")
+}
+
+model Site {
+  id        Int     @id @default(autoincrement())
+  name      String
+  address   String?
+  city      String?
+
+  // Bounding box for MVP geofencing / routing (swap for polygons later)
+  minLat Float?
+  maxLat Float?
+  minLng Float?
+  maxLng Float?
+
+  companyId Int
+  company   Company @relation(fields: [companyId], references: [id])
+
+  reports              Report[]
+  inspections          Inspection[]
+  checklistTemplates   ChecklistTemplate[]
+
+  createdAt DateTime @default(now())
+
+  @@map("sites")
+}
+
+model User {
+  id             Int      @id @default(autoincrement())
+  name           String
+  email          String   @unique
+  hashedPassword String
+  role           Role     @default(WORKER)
+
+  companyId Int?
+  company   Company? @relation(fields: [companyId], references: [id])
+
+  reportsFiled    Report[] @relation("ReportedBy")
+  reportsAssigned Report[] @relation("AssignedTo")
+  inspections     Inspection[]
+
+  createdAt DateTime @default(now())
+
+  @@map("users")
+}
+
+model Report {
+  id Int @id @default(autoincrement())
+
+  category ReportCategory @default(OTHER)
+  severity Severity       @default(MEDIUM)
+  status   ReportStatus   @default(PENDING_REVIEW)
+
+  photoPath      String
+  aiConfidence   Float?
+  aiDescription  String?
+
+  latitude  Float?
+  longitude Float?
+  location  String? // free-text location within the site, e.g. "Bay 3, Line 2"
+
+  siteId Int
+  site   Site @relation(fields: [siteId], references: [id])
+
+  reporterId Int?
+  reporter   User? @relation("ReportedBy", fields: [reporterId], references: [id])
+
+  assignedToId Int?
+  assignedTo   User? @relation("AssignedTo", fields: [assignedToId], references: [id])
+
+  notes String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt
+  resolvedAt DateTime?
+
+  @@map("reports")
+}
+
+model ChecklistTemplate {
+  id       Int    @id @default(autoincrement())
+  name     String // e.g. "Weekly Fire Safety Audit"
+  category String? // e.g. "Fire Safety", "Machine Safety"
+
+  siteId Int
+  site   Site @relation(fields: [siteId], references: [id])
+
+  items       ChecklistItem[]
+  inspections Inspection[]
+
+  createdAt DateTime @default(now())
+
+  @@map("checklist_templates")
+}
+
+model ChecklistItem {
+  id    Int    @id @default(autoincrement())
+  label String // e.g. "Fire extinguisher pressure gauge in green zone"
+  order Int    @default(0)
+
+  templateId Int
+  template   ChecklistTemplate @relation(fields: [templateId], references: [id])
+
+  results InspectionItemResult[]
+
+  @@map("checklist_items")
+}
+
+model Inspection {
+  id     Int               @id @default(autoincrement())
+  status InspectionStatus  @default(SCHEDULED)
+
+  siteId Int
+  site   Site @relation(fields: [siteId], references: [id])
+
+  templateId Int
+  template   ChecklistTemplate @relation(fields: [templateId], references: [id])
+
+  inspectorId Int?
+  inspector   User? @relation(fields: [inspectorId], references: [id])
+
+  scheduledFor DateTime?
+  startedAt    DateTime?
+  completedAt  DateTime?
+
+  results InspectionItemResult[]
+
+  createdAt DateTime @default(now())
+
+  @@map("inspections")
+}
+
+model InspectionItemResult {
+  id     Int     @id @default(autoincrement())
+  passed Boolean?
+  notes  String?
+  photoPath String?
+
+  inspectionId Int
+  inspection   Inspection @relation(fields: [inspectionId], references: [id])
+
+  checklistItemId Int
+  checklistItem   ChecklistItem @relation(fields: [checklistItemId], references: [id])
+
+  @@map("inspection_item_results")
+}
