@@ -114,34 +114,33 @@ def _strip_fences(text: str) -> str:
 
 
 async def _call_vision_model(image_b64: str, mime_type: str) -> ClassificationResult:
-    # Ensure model fallback if settings parameter is missing
     model_name = getattr(settings, "groq_model", None) or "llama-3.2-11b-vision-preview"
     logger.info("Calling Groq Vision API with model: %s", model_name)
 
-    groq_endpoint_url = "[https://api.groq.com/openai/v1/chat/completions](https://api.groq.com/openai/v1/chat/completions)"
+    headers = {
+        "Authorization": f"Bearer {settings.groq_api_key}",
+        "Content-Type": "application/json",
+    }
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(
-            groq_endpoint_url,
-            headers={
-                "Authorization": f"Bearer {settings.groq_api_key}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "model": model_name,
-                "messages": [{
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": PROMPT},
-                        {"type": "image_url", "image_url": {
-                            "url": f"data:{mime_type};base64,{image_b64}"
-                        }},
-                    ],
-                }],
-                "response_format": {"type": "json_object"},
-                "temperature": 0.2,
-            },
-        )
+    payload = {
+        "model": model_name,
+        "messages": [{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": PROMPT},
+                {"type": "image_url", "image_url": {
+                    "url": f"data:{mime_type};base64,{image_b64}"
+                }},
+            ],
+        }],
+        "response_format": {"type": "json_object"},
+        "temperature": 0.2,
+    }
+
+    # Explicit base_url eliminates protocol parsing issues in httpx
+    async with httpx.AsyncClient(base_url="[https://api.groq.com](https://api.groq.com)", timeout=30.0) as client:
+        response = await client.post("/openai/v1/chat/completions", headers=headers, json=payload)
+
     logger.info("Groq API Response Status: %s", response.status_code)
     response.raise_for_status()
 
@@ -169,9 +168,6 @@ async def _call_vision_model(image_b64: str, mime_type: str) -> ClassificationRe
     )
     logger.info("=== [VISION AI SUCCESS] Result: %s ===", result)
     return result
-
-
-
 
 
 
