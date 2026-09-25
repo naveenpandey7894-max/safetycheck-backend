@@ -33,16 +33,39 @@ VALID_CATEGORIES = [
 ]
 VALID_SEVERITIES = ["CRITICAL", "HIGH", "MEDIUM", "LOW"]
 
+# PROMPT = (
+#     "You are inspecting a worker-submitted photo from a factory/facility "
+#     "safety reporting app. Respond ONLY with JSON (no markdown): "
+#     '{"is_valid_issue": bool, '
+#     '"category": one of ["SAFETY_HAZARD","EQUIPMENT_FAULT","QUALITY_DEFECT",'
+#     '"CLEANLINESS","FIRE_SAFETY","ELECTRICAL","OTHER"], '
+#     '"severity": one of ["CRITICAL","HIGH","MEDIUM","LOW"], '
+#     '"confidence": float 0-1, "description": short factual description}. '
+#     "Severity CRITICAL means immediate risk to life or major equipment damage."
+# )
+
+
 PROMPT = (
-    "You are inspecting a worker-submitted photo from a factory/facility "
-    "safety reporting app. Respond ONLY with JSON (no markdown): "
-    '{"is_valid_issue": bool, '
-    '"category": one of ["SAFETY_HAZARD","EQUIPMENT_FAULT","QUALITY_DEFECT",'
-    '"CLEANLINESS","FIRE_SAFETY","ELECTRICAL","OTHER"], '
-    '"severity": one of ["CRITICAL","HIGH","MEDIUM","LOW"], '
-    '"confidence": float 0-1, "description": short factual description}. '
-    "Severity CRITICAL means immediate risk to life or major equipment damage."
+    "You are an expert facility safety auditor analyzing a worker-submitted photo. "
+    "Classify the image strictly according to these categories and severity levels:\n\n"
+    "CATEGORIES:\n"
+    "- EQUIPMENT_FAULT: Damaged office hardware, broken keyboard, cracked mouse, faulty computer gear, broken tools/machinery.\n"
+    "- SAFETY_HAZARD: Physical trip/fall hazards, falling debris, dangerous open structures.\n"
+    "- ELECTRICAL: High-voltage danger, exposed live building wiring, sparking junction boxes (NOT USB cables or low-voltage peripherals).\n"
+    "- CLEANLINESS: Spills, uncleaned trash, dirty/cluttered workspace.\n"
+    "- FIRE_SAFETY: Blocked emergency exits, missing/damaged fire extinguishers, flammable material mishandling.\n"
+    "- QUALITY_DEFECT: Product or manufacturing line flaws.\n"
+    "- OTHER: Anything else unclassifiable.\n\n"
+    "SEVERITY RULES:\n"
+    "- LOW: Non-hazardous items, minor office damage (broken keyboard, mouse, cosmetic wear), slight clutter.\n"
+    "- MEDIUM: Functional operational defect, non-fatal spill, non-urgent repair needed.\n"
+    "- HIGH: Major structural issue, high hazard risk, urgent repair required.\n"
+    "- CRITICAL: Immediate risk to human life, high-voltage electrical risk, active fire hazard.\n\n"
+    "Respond ONLY with raw valid JSON (no markdown formatting, no text before or after):\n"
+    '{"is_valid_issue": true, "category": "<CATEGORY>", "severity": "<SEVERITY>", '
+    '"confidence": <float 0-1>, "description": "<short factual description>"}'
 )
+
 
 
 def _fallback(description: str) -> ClassificationResult:
