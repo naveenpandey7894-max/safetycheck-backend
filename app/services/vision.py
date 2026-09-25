@@ -1,6 +1,9 @@
 """Classifies an uploaded photo into a safety/facility issue category and
 severity using Groq (free tier, OpenAI-compatible vision API).
-"""
+
+If the AI call fails for ANY reason (no key, rate limit, bad response, network),
+a safe fallback result is returned, so creating a report never fails because
+of the AI. The severity can then be corrected manually."""
 import base64
 import json
 import logging
@@ -64,7 +67,7 @@ async def classify_photo(photo_path: str) -> ClassificationResult:
 
     try:
         # 1. Handle Cloudinary HTTPS URL or Web URL
-        if photo_path.startswith("http://") or photo_path.startswith("https://"):
+        if photo_path and (photo_path.startswith("http://") or photo_path.startswith("https://")):
             logger.info("Detected Web/Cloudinary URL. Downloading image via HTTP...")
             async with httpx.AsyncClient(timeout=15.0) as client:
                 resp = await client.get(photo_path)
@@ -89,7 +92,7 @@ async def classify_photo(photo_path: str) -> ClassificationResult:
     except httpx.HTTPStatusError as e:
         status = e.response.status_code
         logger.error("HTTP Exception while fetching image or calling Groq: %s", e)
-        logger.error("Response body: %s", e.response.text)
+        logger.error("Response body: %s", e.response.text[:300])
         reason = "Groq rate limit or quota reached (429)." if status == 429 else f"HTTP error ({status})."
         return _fallback(f"[fallback] {reason} Severity not classified by AI.")
     except Exception as e:
@@ -111,13 +114,21 @@ def _strip_fences(text: str) -> str:
 
 
 async def _call_vision_model(image_b64: str, mime_type: str) -> ClassificationResult:
-    logger.info("Calling Groq Vision API model: %s", settings.groq_model)
+    # Ensure model fallback if settings parameter is missing
+    model_name = getattr(settings, "groq_model", None) or "llama-3.2-11b-vision-preview"
+    logger.info("Calling Groq Vision API with model: %s", model_name)
+
+    groq_endpoint_url = "[https://api.groq.com/openai/v1/chat/completions](https://api.groq.com/openai/v1/chat/completions)"
+
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(
-            "[https://api.groq.com/openai/v1/chat/completions](https://api.groq.com/openai/v1/chat/completions)",
-            headers={"Authorization": f"Bearer {settings.groq_api_key}"},
+            groq_endpoint_url,
+            headers={
+                "Authorization": f"Bearer {settings.groq_api_key}",
+                "Content-Type": "application/json"
+            },
             json={
-                "model": settings.groq_model,
+                "model": model_name,
                 "messages": [{
                     "role": "user",
                     "content": [
@@ -158,7 +169,6 @@ async def _call_vision_model(image_b64: str, mime_type: str) -> ClassificationRe
     )
     logger.info("=== [VISION AI SUCCESS] Result: %s ===", result)
     return result
-
 
 
 
