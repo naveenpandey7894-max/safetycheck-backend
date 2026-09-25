@@ -153,8 +153,6 @@
 
 
 
-
-
 import os
 import uuid
 from datetime import datetime, timezone
@@ -204,25 +202,39 @@ async def create_report(
     """Worker submits a photo. Uploads to Cloudinary, runs AI classification, 
     and saves full HTTPS Cloudinary URL to database."""
     
-    # Read image content
+    # 1. Read image content
     photo_bytes = await photo.read()
 
-    # 1. Upload directly to Cloudinary
-    upload_result = cloudinary.uploader.upload(
-        photo_bytes,
-        folder="safety_reports",
-        resource_type="image"
-    )
-    
-    # Permanent HTTPS URL from Cloudinary
-    cloudinary_photo_url = upload_result.get("secure_url")
+    # 2. Upload directly to Cloudinary with error handling
+    try:
+        upload_result = cloudinary.uploader.upload(
+            photo_bytes,
+            folder="safety_reports",
+            resource_type="image"
+        )
+        cloudinary_photo_url = upload_result.get("secure_url")
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Cloudinary upload failed: {str(e)}"
+        )
 
-    # 2. Run AI vision classification using Cloudinary URL (or bytes)
-    classification = await vision.classify_photo(cloudinary_photo_url)
+    # 3. Run AI vision classification using Cloudinary URL
+    try:
+        classification = await vision.classify_photo(cloudinary_photo_url)
+    except Exception as e:
+        # Fallback if vision service fails/times out
+        class FallbackClassification:
+            is_valid_issue = True
+            category = "OTHER"
+            severity = "MEDIUM"
+            confidence = 0.0
+            description = "AI classification bypassed due to timeout."
+        classification = FallbackClassification()
 
     status = "NOT_AN_ISSUE" if not classification.is_valid_issue else "OPEN"
 
-    # 3. Store permanent Cloudinary URL into database as photoPath
+    # 4. Store permanent Cloudinary URL into database as photoPath
     report = await prisma.report.create(
         data={
             "siteId": site_id,
