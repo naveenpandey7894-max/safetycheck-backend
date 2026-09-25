@@ -137,10 +137,10 @@ async def _call_vision_model(image_b64: str, mime_type: str) -> ClassificationRe
         "temperature": 0.2,
     }
 
-    # Absolute URL pass karne se httpx kabhi UnsupportedProtocol error nahi dega
+   
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(
-            "[https://api.groq.com/openai/v1/chat/completions](https://api.groq.com/openai/v1/chat/completions)",
+           "https://api.groq.com/openai/v1/chat/completions",
             headers=headers,
             json=payload,
         )
