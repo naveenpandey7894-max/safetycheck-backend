@@ -137,9 +137,13 @@ async def _call_vision_model(image_b64: str, mime_type: str) -> ClassificationRe
         "temperature": 0.2,
     }
 
-    # Explicit base_url eliminates protocol parsing issues in httpx
-    async with httpx.AsyncClient(base_url="[https://api.groq.com](https://api.groq.com)", timeout=30.0) as client:
-        response = await client.post("/openai/v1/chat/completions", headers=headers, json=payload)
+    # Absolute URL pass karne se httpx kabhi UnsupportedProtocol error nahi dega
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(
+            "[https://api.groq.com/openai/v1/chat/completions](https://api.groq.com/openai/v1/chat/completions)",
+            headers=headers,
+            json=payload,
+        )
 
     logger.info("Groq API Response Status: %s", response.status_code)
     response.raise_for_status()
@@ -168,11 +172,6 @@ async def _call_vision_model(image_b64: str, mime_type: str) -> ClassificationRe
     )
     logger.info("=== [VISION AI SUCCESS] Result: %s ===", result)
     return result
-
-
-
-
-
 
 
 
