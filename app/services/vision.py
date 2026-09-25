@@ -1,14 +1,11 @@
-
 """Classifies an uploaded photo into a safety/facility issue category and
 severity using Groq (free tier, OpenAI-compatible vision API).
-
-If the AI call fails for ANY reason (no key, rate limit, bad response, network),
-a safe fallback result is returned, so creating a report never fails because
-of the AI. The severity can then be corrected manually."""
+"""
 import base64
 import json
 import logging
 import mimetypes
+import traceback
 from dataclasses import dataclass
 
 import httpx
@@ -46,6 +43,7 @@ PROMPT = (
 
 
 def _fallback(description: str) -> ClassificationResult:
+    logger.warning("Returning FALLBACK classification result: %s", description)
     return ClassificationResult(
         is_valid_issue=True,
         category="OTHER",
@@ -56,36 +54,49 @@ def _fallback(description: str) -> ClassificationResult:
 
 
 async def classify_photo(photo_path: str) -> ClassificationResult:
+    logger.info("=== [VISION AI START] ===")
+    logger.info("Received photo_path: %s", photo_path)
+    logger.info("GROQ_API_KEY configured: %s", bool(settings.groq_api_key))
+
     if not settings.groq_api_key:
+        logger.warning("No GROQ_API_KEY set in environment! Skipping classification.")
         return _fallback("[stub] No GROQ_API_KEY set - skipping real classification.")
 
     try:
         # 1. Handle Cloudinary HTTPS URL or Web URL
         if photo_path.startswith("http://") or photo_path.startswith("https://"):
+            logger.info("Detected Web/Cloudinary URL. Downloading image via HTTP...")
             async with httpx.AsyncClient(timeout=15.0) as client:
                 resp = await client.get(photo_path)
+                logger.info("Download Status Code: %s", resp.status_code)
                 resp.raise_for_status()
                 image_bytes = resp.content
                 mime_type = resp.headers.get("content-type", "image/jpeg")
             image_b64 = base64.b64encode(image_bytes).decode("utf-8")
-        
-        # 2. Handle Local File Path (backwards compatibility)
+            logger.info("Successfully fetched and base64 encoded image from URL.")
+
+        # 2. Handle Local File Path
         else:
+            logger.info("Detected local file path. Attempting to open from disk...")
             with open(photo_path, "rb") as f:
-                image_b64 = base64.b64encode(f.read()).decode("utf-8")
+                image_bytes = f.read()
+                image_b64 = base64.b64encode(image_bytes).decode("utf-8")
             mime_type = mimetypes.guess_type(photo_path)[0] or "image/jpeg"
+            logger.info("Successfully loaded local file.")
 
         return await _call_vision_model(image_b64, mime_type)
 
     except httpx.HTTPStatusError as e:
         status = e.response.status_code
-        logger.warning("Groq API error %s: %s", status, e.response.text[:300])
-        reason = "Groq rate limit or quota reached (429)." if status == 429 else f"Groq API error ({status})."
+        logger.error("HTTP Exception while fetching image or calling Groq: %s", e)
+        logger.error("Response body: %s", e.response.text)
+        reason = "Groq rate limit or quota reached (429)." if status == 429 else f"HTTP error ({status})."
         return _fallback(f"[fallback] {reason} Severity not classified by AI.")
     except Exception as e:
-        logger.warning("Vision classification failed: %r", e)
+        logger.error("EXCEPTIONAL ERROR in classify_photo: %r", e)
+        logger.error("FULL TRACEBACK:\n%s", traceback.format_exc())
         return _fallback(
-            f"[fallback] AI classification failed ({type(e).__name__}). "
+            f"[fallback] AI classification failed ({type(e).__name__}: {str(e)}). "
             "Severity not classified by AI."
         )
 
@@ -100,6 +111,7 @@ def _strip_fences(text: str) -> str:
 
 
 async def _call_vision_model(image_b64: str, mime_type: str) -> ClassificationResult:
+    logger.info("Calling Groq Vision API model: %s", settings.groq_model)
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(
             "[https://api.groq.com/openai/v1/chat/completions](https://api.groq.com/openai/v1/chat/completions)",
@@ -119,10 +131,13 @@ async def _call_vision_model(image_b64: str, mime_type: str) -> ClassificationRe
                 "temperature": 0.2,
             },
         )
+    logger.info("Groq API Response Status: %s", response.status_code)
     response.raise_for_status()
 
-    text = response.json()["choices"][0]["message"]["content"]
-    parsed = json.loads(_strip_fences(text))
+    raw_text = response.json()["choices"][0]["message"]["content"]
+    logger.info("Groq Raw Response Content: %s", raw_text)
+
+    parsed = json.loads(_strip_fences(raw_text))
 
     category = parsed.get("category")
     category = category if category in VALID_CATEGORIES else "OTHER"
@@ -134,14 +149,15 @@ async def _call_vision_model(image_b64: str, mime_type: str) -> ClassificationRe
     except (TypeError, ValueError):
         confidence = 0.5
 
-    return ClassificationResult(
+    result = ClassificationResult(
         is_valid_issue=bool(parsed.get("is_valid_issue", True)),
         category=category,
         severity=severity,
         confidence=confidence,
         description=str(parsed.get("description", "")),
     )
-
+    logger.info("=== [VISION AI SUCCESS] Result: %s ===", result)
+    return result
 
 
 
