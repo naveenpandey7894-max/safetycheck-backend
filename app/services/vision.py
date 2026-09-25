@@ -46,26 +46,29 @@ VALID_SEVERITIES = ["CRITICAL", "HIGH", "MEDIUM", "LOW"]
 
 
 PROMPT = (
-    "You are an expert facility safety auditor analyzing a worker-submitted photo. "
-    "Classify the image strictly according to these categories and severity levels:\n\n"
-    "CATEGORIES:\n"
-    "- EQUIPMENT_FAULT: Damaged office hardware, broken keyboard, cracked mouse, faulty computer gear, broken tools/machinery.\n"
-    "- SAFETY_HAZARD: Physical trip/fall hazards, falling debris, dangerous open structures.\n"
-    "- ELECTRICAL: High-voltage danger, exposed live building wiring, sparking junction boxes (NOT USB cables or low-voltage peripherals).\n"
+    "You are an expert facility safety auditor analyzing a worker-submitted photo.\n"
+    "FIRST, CHECK IMAGE AUTHENTICITY:\n"
+    "- If the image appears to be AI-generated, a digital illustration, a stock photo from the web, "
+    "or a photo taken of a computer screen, set 'is_valid_issue': false.\n\n"
+    "CATEGORIES (If image is a real authentic workplace photo):\n"
+    "- EQUIPMENT_FAULT: Broken office hardware, damaged keyboard, missing keys, cracked mouse, "
+    "cut/frayed peripheral USB cables, non-working machinery/IT gear.\n"
+    "- SAFETY_HAZARD: Physical trip hazards, falling debris, dangerous open structures.\n"
+    "- ELECTRICAL: High-voltage dangers, exposed live wall wiring, sparking breaker boxes "
+    "(NOT peripheral USB or low-voltage accessory cables).\n"
     "- CLEANLINESS: Spills, uncleaned trash, dirty/cluttered workspace.\n"
-    "- FIRE_SAFETY: Blocked emergency exits, missing/damaged fire extinguishers, flammable material mishandling.\n"
-    "- QUALITY_DEFECT: Product or manufacturing line flaws.\n"
-    "- OTHER: Anything else unclassifiable.\n\n"
+    "- FIRE_SAFETY: Blocked emergency exits, missing/damaged fire extinguishers.\n"
+    "- QUALITY_DEFECT: Manufactured product flaws.\n"
+    "- OTHER: Unclassifiable items.\n\n"
     "SEVERITY RULES:\n"
-    "- LOW: Non-hazardous items, minor office damage (broken keyboard, mouse, cosmetic wear), slight clutter.\n"
-    "- MEDIUM: Functional operational defect, non-fatal spill, non-urgent repair needed.\n"
-    "- HIGH: Major structural issue, high hazard risk, urgent repair required.\n"
-    "- CRITICAL: Immediate risk to human life, high-voltage electrical risk, active fire hazard.\n\n"
-    "Respond ONLY with raw valid JSON (no markdown formatting, no text before or after):\n"
-    '{"is_valid_issue": true, "category": "<CATEGORY>", "severity": "<SEVERITY>", '
+    "- LOW: Broken computer accessories (keyboard, mouse, peripheral wire damage), minor cosmetic wear.\n"
+    "- MEDIUM: Functional operational defect, minor non-hazardous spill.\n"
+    "- HIGH: Urgent repair needed, major structural hazard.\n"
+    "- CRITICAL: Immediate danger to life, high-voltage active hazard, fire.\n\n"
+    "Respond ONLY with raw JSON (no markdown):\n"
+    '{"is_valid_issue": true/false, "category": "<CATEGORY>", "severity": "<SEVERITY>", '
     '"confidence": <float 0-1>, "description": "<short factual description>"}'
 )
-
 
 
 def _fallback(description: str) -> ClassificationResult:
