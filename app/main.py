@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from app.core.config import settings
 from app.core.db import prisma
@@ -65,8 +66,6 @@ def privacy_policy():
 @app.get("/terms-and-conditions.html")
 def terms_and_conditions():
     return FileResponse("public/terms-and-conditions.html")
-
-
 
 
 
