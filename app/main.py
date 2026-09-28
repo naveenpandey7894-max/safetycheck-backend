@@ -39,6 +39,7 @@ app.add_middleware(
 # GET /uploads/<filename> -> the actual image bytes.
 os.makedirs(settings.upload_dir, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=settings.upload_dir), name="uploads")
+#app.mount("/", StaticFiles(directory="public", html=True), name="public")
 
 app.include_router(auth.router)
 app.include_router(sites.router)
@@ -56,7 +57,14 @@ def root():
 def health():
     return {"status": "healthy"}
 
+@app.get("/privacy-policy.html")
+def privacy_policy():
+    return FileResponse("public/privacy-policy.html")
 
+
+@app.get("/terms-and-conditions.html")
+def terms_and_conditions():
+    return FileResponse("public/terms-and-conditions.html")
 
 
 
